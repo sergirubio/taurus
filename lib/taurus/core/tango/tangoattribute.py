@@ -288,10 +288,10 @@ class TangoAttribute(TaurusAttribute):
         self._pytango_attrinfoex = None
         self._decodeAttrInfoEx(attr_info)
 
-        # subscribe to configuration events (unsubscription done at cleanup)
+        # subscribe to configuration events delayed until first
+        # value event is received(unsubscription done at cleanup)
+        # as attrinfo is already read, it only affects restarted devices
         self.__cfg_evt_id = None
-        if self.factory().is_tango_subscribe_enabled():
-            self._subscribeConfEvents()
 
 
     def cleanUp(self):
@@ -760,6 +760,7 @@ class TangoAttribute(TaurusAttribute):
         specific handlers for different event types.
         """
         with self.__read_lock:
+
             # if it is a configuration event
             if isinstance(event, PyTango.AttrConfEventData):
                 etype, evalue = self._pushConfEvent(event)
@@ -778,6 +779,11 @@ class TangoAttribute(TaurusAttribute):
                                listeners=listeners)
             else:
                 self.fireEvent(etype, evalue, listeners=listeners)
+                
+            # if configuration events are not subscribed yet, do it now
+            if self.__cfg_evt_id is None:
+                self._subscribeConfEvents()
+                
 
     def _pushAttrEvent(self, event):
         """Handler of (non-configuration) events from the PyTango layer.

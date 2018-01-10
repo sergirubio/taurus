@@ -217,23 +217,29 @@ class TaurusEmitterThread(Qt.QThread):
         self._done = 0
         # Moved to the end to prevent segfaults ...
         self.emitter.doSomething.connect(self._doSomething)
-
-        if not self.refreshTimer:
-            self.emitter.somethingDone.connect(self.next)
-
-    def onRefresh(self):
+        self.emitter.somethingDone.connect(self.next)
+        
+    def locking(self, v = None):
         try:
-            # If doSomething is being executed, this refresh will be skipped
-            self.lock.lockForRead()
-            if self.busy:
-                return
+            if v is None:
+                self.lock.lockForRead()
+            else:
+                self.lock.lockForWrite()
+                self.busy = bool(v)
+            return self.busy
         finally:
             self.lock.unlock()
+
+    def onRefresh(self):
+        # If doSomething is being executed, this refresh will be skipped
+        if self.locking():
+            self.log.debug('onRefresh(): still busy')
+            return
         try:
             size = self.getQueue().qsize()
             if size:
                 self.log.info('onRefresh(%s)' % size)
-                self.next()
+                self.emitter.somethingDone.emit()
             else:
                 self.log.debug('onRefresh()')
         except:
@@ -275,12 +281,13 @@ class TaurusEmitterThread(Qt.QThread):
         while not nqueue.empty():
             self.queue.put(nqueue.get())
         self.next()
-
+        
     def _doSomething(self, params):
         self.log.debug('At TaurusEmitterThread._doSomething(%s)' % str(params))
-        self.lock.lockForWrite()
-        self.busy = True
-        self.lock.unlock()
+        self.locking(True)
+        if self.refreshTimer:
+            self.refreshTimer.stop()
+        
         if not self.method:
             method, args = params[0], params[1:]
         else:
@@ -291,11 +298,13 @@ class TaurusEmitterThread(Qt.QThread):
             except:
                 self.log.error('At TaurusEmitterThread._doSomething(%s): \n%s'
                                % (map(str, args), traceback.format_exc()))
-        self.emitter.somethingDone.emit()
+
         self._done += 1
-        self.lock.lockForWrite()
-        self.busy = False
-        self.lock.unlock()        
+        if self.refreshTimer:
+            self.refreshTimer.start(self.polling)
+        else:
+            self.emitter.somethingDone.emit()
+        self.locking(False)            
         return
 
     def next(self):

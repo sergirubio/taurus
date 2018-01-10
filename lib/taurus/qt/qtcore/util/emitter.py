@@ -200,6 +200,8 @@ class TaurusEmitterThread(Qt.QThread):
         self._cursor = False
         self.timewait = int(sleep)
         self.polling = int(polling)
+        self.lock = Qt.QReadWriteLock()
+        self.busy = False
         self.loopwait = int(loopwait)
         if self.polling:
             self.refreshTimer = Qt.QTimer()
@@ -220,6 +222,13 @@ class TaurusEmitterThread(Qt.QThread):
             self.emitter.somethingDone.connect(self.next)
 
     def onRefresh(self):
+        try:
+            # If doSomething is being executed, this refresh will be skipped
+            self.lock.lockForRead()
+            if self.busy:
+                return
+        finally:
+            self.lock.unlock()
         try:
             size = self.getQueue().qsize()
             if size:
@@ -269,6 +278,9 @@ class TaurusEmitterThread(Qt.QThread):
 
     def _doSomething(self, params):
         self.log.debug('At TaurusEmitterThread._doSomething(%s)' % str(params))
+        self.lock.lockForWrite()
+        self.busy = True
+        self.lock.unlock()
         if not self.method:
             method, args = params[0], params[1:]
         else:
@@ -281,6 +293,9 @@ class TaurusEmitterThread(Qt.QThread):
                                % (map(str, args), traceback.format_exc()))
         self.emitter.somethingDone.emit()
         self._done += 1
+        self.lock.lockForWrite()
+        self.busy = False
+        self.lock.unlock()        
         return
 
     def next(self):

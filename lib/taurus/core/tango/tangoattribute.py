@@ -291,7 +291,12 @@ class TangoAttribute(TaurusAttribute):
         # subscribe to configuration events (unsubscription done at cleanup)
         self.__cfg_evt_id = None
         if self.factory().is_tango_subscribe_enabled():
-            self._subscribeConfEvents()
+            sm = self.getSerializationMode()
+            if sm == TaurusSerializationMode.Concurrent:
+                self.warning('Sending subscribeConfEvents to background Manager')
+                Manager().addJob(self._subscribeConfEvents, None)
+            else:
+                self._subscribeConfEvents()
 
 
     def cleanUp(self):
@@ -568,12 +573,20 @@ class TangoAttribute(TaurusAttribute):
         assert len(listeners) >= 1
 
         if self.__subscription_state == SubscriptionState.Unsubscribed and len(listeners) == 1:
-            self._subscribeEvents()
+            sm = self.getSerializationMode()
+            self.warning(str(sm))
+            if sm == TaurusSerializationMode.Concurrent:
+                self.warning('Sending subscribeConfEvents to background Manager')
+                Manager().addJob(self._subscribeEvents, None)
+            else:
+                self.warning('Serializing ...')
+                self._subscribeEvents()
 
         # if initial_subscription_state == SubscriptionState.Subscribed:
         if len(listeners) > 1 and (initial_subscription_state == SubscriptionState.Subscribed or self.isPollingActive()):
             sm = self.getSerializationMode()
             if sm == TaurusSerializationMode.Concurrent:
+                print('Sending RegisterEvent to background Manager')
                 Manager().addJob(self.__fireRegisterEvent, None, (listener,))
             else:
                 self.__fireRegisterEvent((listener,))

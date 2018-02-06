@@ -86,7 +86,7 @@ class TaurusManager(Singleton, Logger):
             self._thread_pool = ThreadPool(name="TaurusTP",
                                            parent=self,
                                            Psize=5,
-                                           Qsize=1000)
+                                           Qsize=5000)
         else:
             self._thread_pool = None
         self._plugins = None

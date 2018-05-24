@@ -807,8 +807,19 @@ class TaurusMainWindow(Qt.QMainWindow, TaurusBaseContainer):
             self.socketServer.close()
         Qt.QMainWindow.closeEvent(self, event)
         TaurusBaseContainer.closeEvent(self, event)
+        
+        # print "\n\n------ MAIN WINDOW CLOSED ------ \n\n"        
+        
+    def contextMenuEvent(self, event):
+        """Handle the popup menu event, as it is the last container in the chain
+        it must accept() events instead of ignore()
 
-        # print "\n\n------ MAIN WINDOW CLOSED ------ \n\n"
+        :param event: the popup menu event
+        """
+        if self.taurusMenu is not None:
+            self.taurusMenu.exec_(event.globalPos())
+        else:
+            event.accept()        
 
     def addExternalAppLauncher(self, extapp, toToolBar=True, toMenu=True):
         '''
